@@ -4,82 +4,66 @@ import argparse
 import sys
 from collections import deque
 
-def create_costs(l,find_min):
-    if len(l) != len(l[0]):
-        print('cost array is not n x n')
-        exit()
-    costs = {} 
-    total_nodes = len(l) + len(l[0]) #assume all sublists have same length
-
-    #for i in range(len(l)):
-        #for j in range(len(l),total_nodes):
-            #costs[(i,j)] = l[i][i]
-
-    minc = min(min([-1 * n for n in ll]) for ll in l)
-    for i in range(len(l)):
-        for j in range(len(l[i])):
-            if find_min:
-                costs[(i,j + len(l))] = l[i][j] 
-            else:
-                costs[(i,j + len(l))] = -1 * l[i][j] + minc
-    #costs[(3,7)] = 55
-    return costs
-
-def create_graph(matrix): 
+def create_graph(matrix,find_min,assignment): 
     graph = {}
+    costs = {}
     rows = len(matrix)
     cols = len(matrix[0])   #assume all sublists have same length
-    for i in range(rows + cols):
-        if i < rows:
-            graph[i] = matrix[i]
+    minc = min(min([-1 * n for n in ll]) for ll in matrix) * -1
+    def get_cost(val):
+        if find_min:
+            return val
         else:
-            graph[i] = [l[i - rows] for l in matrix]
-
-    
-
+            return -1 * val + minc
+    #first case
+    if assignment:
+        for i in range(rows + cols):
+            if i < rows:
+                graph[i] = list(range(rows,rows + cols))
+                for j in range(cols):
+                    costs[(i,j + rows)] = get_cost(matrix[i][j])
+            else:
+                graph[i] = list(range(rows))
 
     #second case:
-
-
-
-    pass
-    
-def graph_neighbours(graph,node):
-    total_nodes = len(graph) + len(graph[0])
-    seperator = len(graph)
-    if node < seperator:
-        return list(range(seperator,total_nodes))
     else:
-        return list(range(seperator))
-
-
-def graph_neighbours_portrait(graph,node):
-    xlen = len(graph)
-    ylen = len(graph[0])
-    def out_of_bounds(point):
-        x, y = point
-        if x >= xlen or x < 0:
-            return False 
-        if y >= ylen or y < 0:
-            return False
-        return True
+        def out_of_bounds(point):
+            x, y = point
+            if x >= rows or x < 0:
+                return False 
+            if y >= cols or y < 0:
+                return False
+            return True
+            
         
-    def convert_two_dim(node):
-        x = node // ylen
-        y = node % ylen
-        return x,y
-    
-    x, y = convert_two_dim(node)
-    neigh = [(x-1,y),(x+1,y),(x,y-1),(x,y+1)]
-    return filter(neigh,out_of_bounds)
+        def convert_one_dim(point):
+            return point[0] * cols + point[1]
         
+        for x in range(rows):
+            for y in range(cols):
+                node = convert_one_dim((x,y))
+                neigh = [(x-1,y),(x+1,y),(x,y-1),(x,y+1)]
+                filtered_neigh = list(filter(out_of_bounds,neigh))
+                graph[node] = list(map(convert_one_dim,filtered_neigh))
+                for point in filtered_neigh:
+                    if not point in costs:
+                        n = convert_one_dim(point)
+                        key = (min(n,node),max(n,node))
+                        xx,yy = point
+                        costs[key] = get_cost((matrix[xx][yy] - matrix[x][y]) ** 2)
+
+    return graph,costs
+
+def minc(matrix):
+    return min(min([-1 * n for n in ll]) for ll in matrix) * -1
+
 def get_path(pred,node):
     l = []
     curr = node
     while curr != -1:
         l.append(curr)
         curr = pred[curr]
-    l.reverse() # or not
+    l.reverse()
     res = []
     for i in range(len(l)-1):
         res.append((l[i],l[i+1]))
@@ -88,18 +72,13 @@ def get_path(pred,node):
 
 
 def bfs(graph,node,costs,prices,matching):
-    total_nodes = len(graph) + len(graph[0])
+    total_nodes = len(graph.keys())
     q = deque() 
     visited = list([False] * (total_nodes))
     inqueue = list([False] * (total_nodes))
     pred = list([-1] * (total_nodes))
     odd_nodes = set() 
     even_nodes = set() 
-    for i in range(total_nodes):
-        visited[i] = False
-        inqueue[i] = False
-        pred[i] =  -1
-
     q.append(node)
     inqueue[node] = True 
     q.append(-1)
@@ -118,12 +97,11 @@ def bfs(graph,node,costs,prices,matching):
         else:
             next_level_odd = False
             odd_nodes.add(c)
-        for u in graph_neighbours(graph,c):
+        for u in graph[c]:
             if not visited[u] and costs[(min(u,c),max(u,c))] == prices[u] + prices[c]:
                 if next_level_odd and matching[u] is None:
                     pred[u] = c
                     path = get_path(pred,u)
-                    #print(path,pred)
                     return path,odd_nodes,even_nodes
                 if ((next_level_odd and matching[c] != u) or (not next_level_odd and matching[c] == u)) and not inqueue[u]:
                     q.append(u)
@@ -134,10 +112,10 @@ def bfs(graph,node,costs,prices,matching):
 
 
 def hungarian(graph,costs):
-    total_nodes = len(graph) + len(graph[0])
+    total_nodes = len(graph.keys())
     matching = list([None] * total_nodes)
     prices = list([0] * total_nodes)
-    while not is_perfect_matching(graph,matching):
+    while not is_perfect_matching(matching):
         node =  find_first_unmatched(matching)
         path, odd_nodes, even_nodes = bfs(graph,node,costs,prices,matching)
         if path is not None:
@@ -149,36 +127,52 @@ def hungarian(graph,costs):
                     new_matching[v] = u
                 flag = not flag
             matching = new_matching
-            #print(matching)
         else:
-            #print(odd_nodes,even_nodes)
             d = compute_delta(graph,odd_nodes,even_nodes,costs,prices)
-            #print(d)
             for u in even_nodes:
                 prices[u] += d
             for u in odd_nodes:
                 prices[u] -= d
     fmatching = format_matching(graph,matching)
-    return fmatching,find_total_cost(graph,fmatching)
+    if assignment:
+        return fmatching,find_total_cost(graph,matching,costs)
+    else:
+        return format_matching_portrait(graph,matching,costs),find_total_cost(graph,matching,costs)
 
     
-
 def format_matching(graph,matching):
-    stop = len(graph)
+    stop = max(graph[max(graph.keys())]) + 1 #hacky 
     return [matching[i] - stop for i in range(stop)]
 
 
-def find_total_cost(graph,fmatch):
-    summ = 0
-    for i in range(len(fmatch)):
-        summ +=  graph[i][fmatch[i]]
-    return summ
+def find_total_cost(graph,matching,costs):
+    l = []
+    for i in range(len(matching)):
+        l.append((min(i,matching[i]),max(i,matching[i])))
+    l = list(dict.fromkeys(l))
+    if find_min:
+        l = [costs[pair] for pair in l]
+    else:
+        l = [costs[pair] * -1 + minc(matrix) for pair in l]
+    return sum(l,0)
+
+def format_matching_portrait(graph,matching,costs):
+    def convert_two_dim(node):
+        cols = len(matrix[0])
+        x = node // cols
+        y = node % cols
+        return x,y
+    def f(pair):
+        return convert_two_dim(pair[0]),convert_two_dim(pair[1])
+    l = []
+    for i in range(len(matching)):
+        l.append((min(i,matching[i]),max(i,matching[i])))
+    l = list(dict.fromkeys(l))
+    return list(map(f,l))
 
 
 
-
-def is_perfect_matching(graph,matching):
-    #print(matching)
+def is_perfect_matching(matching):
     def truthy(e):
         return e is not None
     return all(map(truthy,matching))
@@ -189,7 +183,7 @@ def find_first_unmatched(matching):
             return i
 
 def compute_delta(graph,odd_nodes,even_nodes,costs,prices):
-    total_nodes = len(graph) + len(graph[0])
+    total_nodes = len(graph.keys())
     all_nodes = set(list(range(total_nodes)))
     not_odd = all_nodes.difference(odd_nodes)
     l = []
@@ -197,17 +191,15 @@ def compute_delta(graph,odd_nodes,even_nodes,costs,prices):
         for v in list(not_odd):
             key = (min(u,v),max(u,v))
             if key in costs:
-                #print(costs[key],prices[u],prices[v])
                 l.append(costs[key] - (prices[u] + prices[v]))
     
-    #print(l)
     return min(l)
         
 
 
 
 
-l = [
+matrix = [
     [1,1,2,43254],
     [3,4,5,32143],
     [6,7,8,43],
@@ -242,19 +234,41 @@ l4 = [
     [7, 6, 7, 4, 6, 7, 3, 1, 4, 5],
     [7, 7, 5, 1, 2, 2, 8, 2, 9, 9 ],
 ]
-#print(graph_neighbours(l,4))
+
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-m","--maximize",action="store_false",)
+parser.add_argument('input_file',nargs = '?')
+parser.add_argument("-m","--maximize",action="store_true",)
 parser.add_argument("-a","--assignment",type=str)
+parser.add_argument('tiling_file',nargs = '?')
+parser.add_argument('dominoes_file',nargs = '?')
 args = parser.parse_args()
 
-if args.assignment:
-    with open(args.assignment) as f:
-        l = f.readlines()
-        l = [list(map(int,s.rstrip().split()))  for s in l]
+inputf = args.input_file
+assignment = False
+find_min = False
+if args.input_file is None:
+    inputf = args.assignment
+    assignment = True
+    find_min = not args.maximize
+with open(inputf) as f:
+    matrix = f.readlines()
+    matrix = [list(map(int,s.rstrip().split()))  for s in matrix]
 
-print(hungarian(l,create_costs(l,args.maximize)))
-#print(hungarian(l4,create_costs(l4,False)))
-#print(hungarian(l3,create_costs(l3,True)))
-#print(hungarian(l,create_costs(l)))
+graph, costs = create_graph(matrix,find_min,assignment)
+matching, cost = hungarian(graph,costs)
+
+if not assignment:
+    tiles = ""
+    for pairs in matching:
+        p1,p2 = pairs
+        p1 = tuple(map(str,p1))
+        p2 = tuple(map(str,p2))
+        tiles += '(' + p1[0] + ', ' + p1[1] + ') '
+        tiles += '(' + p2[0] + ', ' + p2[1] + ') \n'
+
+
+
+
+    with open(args.tiling_file,'w+') as f:
+        f.write(tiles)
