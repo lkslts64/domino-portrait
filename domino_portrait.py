@@ -55,6 +55,18 @@ def create_graph(matrix,find_min,assignment):
 
     return graph,costs
 
+def create_matrix_second_phase(matrix,matching_first_phase,lighting,dominoes):
+    ret = [[j for j in range(330)] for i in range(330)] #init in 2d
+    for i in range(330):
+        for j in range(330):
+            ret[i][j] = min((lighting[i][0] - dominoes[j][0]) ** 2 + (lighting[i][1] - dominoes[j][1]) ** 2,(lighting[i][0] - dominoes[j][1]) ** 2 + (lighting[i][1] - dominoes[j][0]) ** 2)
+    return ret
+
+
+
+
+
+
 def get_path(pred,node):
     l = []
     curr = node
@@ -109,7 +121,7 @@ def bfs(graph,node,costs,prices,matching):
     return None,odd_nodes,even_nodes
 
 
-def hungarian(graph,costs):
+def hungarian(graph,costs,assignment,find_min,matrix):
     total_nodes = len(graph.keys())
     matching = list([None] * total_nodes)
     prices = list([0] * total_nodes)
@@ -131,11 +143,24 @@ def hungarian(graph,costs):
                 prices[u] += d
             for u in odd_nodes:
                 prices[u] -= d
-    fmatching = format_matching(graph,matching)
+    cost = find_total_cost(graph,matching,costs,find_min,matrix)
     if assignment:
-        return fmatching,find_total_cost(graph,matching,costs)
+        return matching,cost
     else:
-        return format_matching_portrait(graph,matching,costs),find_total_cost(graph,matching,costs)
+        tiles_match = format_matching_portrait1(graph,matching,costs,matrix)
+        lighting = [(matrix[t1[0]][t1[1]],matrix[t2[0]][t2[1]]) for t1,t2 in tiles_match]
+        dominoes = []
+        for i in range(10):
+            for j in range(i,10):
+                for _ in range(6):
+                    dominoes.append((i,j))
+        msp = create_matrix_second_phase(matrix,tiles_match,lighting,dominoes)
+        find_min2 = True
+        assignment2 = True
+        graph2,costs2 = create_graph(msp,find_min2,assignment2)
+        dom_match, dom_cost = hungarian(graph2,costs2,assignment2, find_min2,msp)
+        dom_match = format_matching_portrait2(dom_match,tiles_match,dominoes)
+        return (tiles_match,dom_match),(cost,dom_cost)
 
     
 def format_matching(graph,matching):
@@ -143,15 +168,16 @@ def format_matching(graph,matching):
     return [matching[i] - stop for i in range(stop)]
 
 
-def find_total_cost(graph,matching,costs):
+def find_total_cost(graph,matching,costs,find_min,matrix):
     l = unique_matching(matching)
+    #print(l)
     if find_min:
         l = [costs[pair] for pair in l]
     else:
         l = [costs[pair] * -1 + minc(matrix) for pair in l]
     return sum(l,0)
 
-def format_matching_portrait(graph,matching,costs):
+def format_matching_portrait1(graph,matching,costs,matrix):
     def convert_two_dim(node):
         cols = len(matrix[0])
         x = node // cols
@@ -160,6 +186,21 @@ def format_matching_portrait(graph,matching,costs):
     def f(pair):
         return convert_two_dim(pair[0]),convert_two_dim(pair[1])
     l = unique_matching(matching)
+    return list(map(f,l))
+
+def format_matching_portrait2(matching,tiles,dominoes):
+    omg = matching[:]
+    omg.sort()
+    print(omg)
+    l = unique_matching(matching)
+    m = [x for x,y in l]
+    m.sort()
+    print(m)
+    o = [y for x,y in l]
+    o.sort()
+    print(o)
+    def f(pair):
+        return (tiles[pair[0]],dominoes[pair[1] - 330])
     return list(map(f,l))
 
 def unique_matching(matching):
@@ -195,43 +236,6 @@ def compute_delta(graph,odd_nodes,even_nodes,costs,prices):
 
 
 
-matrix = [
-    [1,1,2,43254],
-    [3,4,5,32143],
-    [6,7,8,43],
-    [32,432,434,231],
-    
-]
-
-l3 = [
-    [6, 2, 1, 9, 4,],
-    [2, 9, 1, 8, 0,],
-    [5, 9, 4, 7, 3,],
-    [2, 9, 7, 0, 4,],
-    [2, 3, 1, 4, 5,],
-]
-
-l2 = [
-    [5,1,3],
-    [3,0,5],
-    [3,2,2],
-]
-
-
-l4 = [
-    [3, 4, 3, 5, 4, 7, 0, 4, 4, 8],
-    [8, 0, 6, 2, 2, 4, 8, 5, 6, 1],
-    [3, 9, 8, 8, 6, 1, 1, 3, 6, 0],
-    [5, 1, 2, 6, 5, 5, 1, 5, 3, 4],
-    [8, 2, 9, 3, 6, 1, 2, 2, 0, 3],
-    [1, 7, 8, 1, 4, 3, 9, 0, 0, 9],
-    [0, 6, 8, 7, 6, 2, 1, 5, 3, 5],
-    [9, 8, 4, 1, 2, 0, 6, 4, 9, 6],
-    [7, 6, 7, 4, 6, 7, 3, 1, 4, 5],
-    [7, 7, 5, 1, 2, 2, 8, 2, 9, 9 ],
-]
-
-
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file',nargs = '?')
 parser.add_argument("-m","--maximize",action="store_true",)
@@ -252,22 +256,39 @@ with open(inputf) as f:
     matrix = [list(map(int,s.rstrip().split()))  for s in matrix]
 
 graph, costs = create_graph(matrix,find_min,assignment)
-matching, cost = hungarian(graph,costs)
+matching, cost = hungarian(graph,costs,assignment,find_min,matrix)
+
+def stringify_int_tuple(t):
+    t = tuple(map(str,t))
+    return '(' + t[0] + ', ' + t[1] + ')'
+
+def tuplefy_str(s1,s2):
+    return '('  + s1 + ', ' + s2 + ') '
+
 
 if not assignment:
     tiles = ""
-    for pairs in matching:
+    tiles_matching = matching[0]
+    dominoes_matching = matching[1]
+    for pairs in tiles_matching:
         p1,p2 = pairs
-        p1 = tuple(map(str,p1))
-        p2 = tuple(map(str,p2))
-        tiles += '(' + p1[0] + ', ' + p1[1] + ') '
-        tiles += '(' + p2[0] + ', ' + p2[1] + ') \n'
-
-
-
+        tiles += stringify_int_tuple(p1)  + ' ' + stringify_int_tuple(p2) + ' \n'
+    
+    dominoes = ""
+    for pairs in dominoes_matching:
+        p1 , p2 = pairs 
+        dominoes += tuplefy_str(stringify_int_tuple(p1[0]),stringify_int_tuple(p1[1])) + ': ' + stringify_int_tuple(p2) + '\n'
 
     with open(args.tiling_file,'w+') as f:
         f.write(tiles)
 
-print(matching)
-print(cost)
+    with open(args.dominoes_file,'w+') as f:
+        f.write(dominoes)
+    print(cost[0])
+    print(cost[1])
+else:
+    fmatching = format_matching(graph,matching)
+    for n in matching:
+        print(n,end=' ')
+    print()
+    print(cost)
