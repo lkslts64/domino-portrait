@@ -144,10 +144,7 @@ def format_matching(graph,matching):
 
 
 def find_total_cost(graph,matching,costs):
-    l = []
-    for i in range(len(matching)):
-        l.append((min(i,matching[i]),max(i,matching[i])))
-    l = list(dict.fromkeys(l))
+    l = unique_matching(matching)
     if find_min:
         l = [costs[pair] for pair in l]
     else:
@@ -162,13 +159,14 @@ def format_matching_portrait(graph,matching,costs):
         return x,y
     def f(pair):
         return convert_two_dim(pair[0]),convert_two_dim(pair[1])
+    l = unique_matching(matching)
+    return list(map(f,l))
+
+def unique_matching(matching):
     l = []
     for i in range(len(matching)):
         l.append((min(i,matching[i]),max(i,matching[i])))
-    l = list(dict.fromkeys(l))
-    return list(map(f,l))
-
-
+    return list(dict.fromkeys(l))
 
 def is_perfect_matching(matching):
     def truthy(e):
@@ -271,4 +269,5 @@ if not assignment:
     with open(args.tiling_file,'w+') as f:
         f.write(tiles)
 
+print(matching)
 print(cost)
