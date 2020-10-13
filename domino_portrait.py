@@ -1,20 +1,21 @@
-#TODO: create regular graph (dict like) to unify portrait cases and cost list case.
-
 import argparse
 import sys
 from collections import deque
+
+def minc(matrix):
+    return min(min([-1 * n for n in ll]) for ll in matrix) * -1
 
 def create_graph(matrix,find_min,assignment): 
     graph = {}
     costs = {}
     rows = len(matrix)
     cols = len(matrix[0])   #assume all sublists have same length
-    minc = min(min([-1 * n for n in ll]) for ll in matrix) * -1
+    mincc = minc(matrix)
     def get_cost(val):
         if find_min:
             return val
         else:
-            return -1 * val + minc
+            return -1 * val + mincc
     #first case
     if assignment:
         for i in range(rows + cols):
@@ -53,9 +54,6 @@ def create_graph(matrix,find_min,assignment):
                         costs[key] = get_cost((matrix[xx][yy] - matrix[x][y]) ** 2)
 
     return graph,costs
-
-def minc(matrix):
-    return min(min([-1 * n for n in ll]) for ll in matrix) * -1
 
 def get_path(pred,node):
     l = []
@@ -272,3 +270,5 @@ if not assignment:
 
     with open(args.tiling_file,'w+') as f:
         f.write(tiles)
+
+print(cost)
