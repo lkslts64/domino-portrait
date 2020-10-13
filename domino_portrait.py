@@ -189,16 +189,7 @@ def format_matching_portrait1(graph,matching,costs,matrix):
     return list(map(f,l))
 
 def format_matching_portrait2(matching,tiles,dominoes):
-    omg = matching[:]
-    omg.sort()
-    print(omg)
     l = unique_matching(matching)
-    m = [x for x,y in l]
-    m.sort()
-    print(m)
-    o = [y for x,y in l]
-    o.sort()
-    print(o)
     def f(pair):
         return (tiles[pair[0]],dominoes[pair[1] - 330])
     return list(map(f,l))
@@ -288,7 +279,7 @@ if not assignment:
     print(cost[1])
 else:
     fmatching = format_matching(graph,matching)
-    for n in matching:
+    for n in fmatching:
         print(n,end=' ')
     print()
     print(cost)
